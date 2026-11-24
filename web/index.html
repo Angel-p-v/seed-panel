@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101517">
+  <title>Seeds · qBittorrent</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="stylesheet" href="/panel.css">
+  <script src="/panel.js" defer></script>
+</head>
+<body>
+  <main>
+    <header class="masthead">
+      <div class="brand">
+        <img src="/icon.svg" width="44" height="44" alt="">
+        <div><h1>Seeds</h1><p>qBittorrent</p></div>
+      </div>
+      <div id="updated" class="updated" role="status">Consultando el panel…</div>
+    </header>
+    <p id="notice" class="notice" role="status" hidden></p>
+
+    <section class="traffic" aria-labelledby="traffic-title">
+      <div class="section-top">
+        <div>
+          <h2 id="traffic-title">Subida total</h2>
+          <p id="total" class="total">—</p>
+          <p id="period-label" class="period-label">Subida de hoy por hora</p>
+        </div>
+        <div class="switch" aria-label="Periodo de la gráfica">
+          <button type="button" data-period="today" aria-pressed="true">Hoy</button>
+          <button type="button" data-period="week" aria-pressed="false">Semana</button>
+        </div>
+      </div>
+      <div class="chart">
+        <div id="scale" class="scale" aria-hidden="true"></div>
+        <div id="bars" class="bars" aria-label="Detalle de subida por periodo"></div>
+      </div>
+      <div class="chart-footer">
+        <p id="chart-detail" class="chart-detail" aria-live="polite">Esperando la primera lectura.</p>
+        <p id="chart-total-torrents" class="chart-total-torrents" title="Total de torrents en la última lectura">— torrents</p>
+      </div>
+    </section>
+
+    <section class="torrents" aria-labelledby="torrents-title">
+      <div class="section-top list-title">
+        <h2 id="torrents-title">Torrents</h2>
+        <p id="rate" class="rate">—</p>
+      </div>
+      <div class="filters" aria-label="Filtro de torrents">
+        <button type="button" data-group="sharing" aria-pressed="true">Compartiendo <span id="sharing-count">0</span></button>
+        <button type="button" data-group="downloading" aria-pressed="false">Descargando <span id="downloading-count">0</span></button>
+        <button type="button" data-group="stopped" aria-pressed="false">Parados <span id="stopped-count">0</span></button>
+        <button type="button" data-group="error" aria-pressed="false">Con error <span id="error-count">0</span></button>
+      </div>
+      <div class="list-controls">
+        <label>
+          Buscar por nombre
+          <input id="torrent-search" type="search" placeholder="Nombre del torrent" autocomplete="off">
+        </label>
+        <label>
+          Ordenar por
+          <select id="torrent-sort">
+            <option value="speed">Velocidad de subida</option>
+            <option value="size-desc">Tamaño ↓</option>
+            <option value="size-asc">Tamaño ↑</option>
+            <option value="ratio-desc">Ratio ↓</option>
+            <option value="name">Nombre A–Z</option>
+          </select>
+        </label>
+      </div>
+      <ul id="torrent-list" class="torrent-list"></ul>
+      <p id="empty" class="empty">Esperando la primera lectura.</p>
+    </section>
+  </main>
+</body>
+</html>

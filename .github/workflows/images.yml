@@ -1,0 +1,37 @@
+name: Release Docker images
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  image:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build and test
+        run: docker build -t seed-panel:${GITHUB_REF_NAME} .
+      - name: Export image
+        run: docker save seed-panel:${GITHUB_REF_NAME} | gzip > seed-panel-${GITHUB_REF_NAME}-linux-${{ matrix.arch }}.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.arch }}
+          path: seed-panel-*.tar.gz
+  release:
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-*
+          merge-multiple: true
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" seed-panel-*.tar.gz --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes

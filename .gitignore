@@ -1,0 +1,8 @@
+.env*
+!.env.example
+/secrets/
+/data/
+*.db
+*.db-*
+/seed-panel
+/seed-panel-image.tar.gz
