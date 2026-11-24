@@ -9,7 +9,7 @@ Panel web de solo lectura para seguir qBittorrent desde el móvil. El colector g
 
 ## Instalación de la imagen Docker
 
-Necesitas Docker con Compose y qBittorrent 5.2 o posterior con la Web UI activa. En qBittorrent, abre **Ajustes → Interfaz web → Clave API** y genera una clave si todavía no tienes una.
+Necesitas Linux de 64 bits (AMD64 o ARM64), Git, curl, Docker con Compose y qBittorrent 5.2 o posterior con la Web UI activa. En qBittorrent, abre **Ajustes → Interfaz web → Clave API** y genera una clave si todavía no tienes una. La versión ARM64 también requiere un sistema operativo de 64 bits en Raspberry Pi. Si usas Fish, entra primero en Bash ejecutando `bash`.
 
 ```bash
 git clone https://github.com/Angel-p-v/seed-panel.git
@@ -28,9 +28,28 @@ cp -n .env.example secrets/.env
 chmod 600 secrets/.env
 ```
 
-Editar `secrets/.env` y pegar la clave después de `QBT_API_KEY=`. Docker monta este directorio como solo lectura y el navegador nunca recibe la clave. No guardar la clave en `.env.example`.
+Abre `secrets/.env` con `nano secrets/.env` y pega la clave justo después de `QBT_API_KEY=`, sin comillas. Docker monta este directorio como solo lectura y el navegador nunca recibe la clave. Mantén `.env.example` vacío.
 
-El contenedor se conecta a una red Docker existente a la que también debe pertenecer qBittorrent. Ajusta estas variables según tu instalación. Puedes exportarlas antes de ejecutar Compose o ponerlas en un `.env` local en la raíz del proyecto, separado de `secrets/.env`.
+### Conexión con qBittorrent
+
+Si el contenedor de qBittorrent se llama `qbittorrent`, está en la red `qbittorrent_default` y su Web UI escucha en el puerto interno `8080`, puedes usar los valores predeterminados. Si tu instalación difiere, estos comandos ayudan a identificar el contenedor, su red y los puertos publicados:
+
+```bash
+docker ps --format '{{.Names}} {{.Ports}}'
+docker inspect --format '{{range $name, $net := .NetworkSettings.Networks}}{{println $name}}{{end}}' qbittorrent
+docker port qbittorrent
+```
+
+Sustituye `qbittorrent` por el nombre real del contenedor. Si el puerto se publica como `8085:8080`, desde la red compartida usa el puerto interno `8080`. Si la propia Web UI escucha en `8085` dentro del contenedor, usa `8085`.
+
+Para guardar los ajustes, crea un archivo `.env` en la raíz del proyecto, al lado de `compose.yaml`. Por ejemplo, para un contenedor llamado `torrent` en la red `media_default`:
+
+```dotenv
+QBT_NETWORK=media_default
+QBT_URL=http://torrent:8080
+```
+
+Si qBittorrent está instalado fuera de Docker o en otro equipo, indica en `QBT_URL` una dirección de su Web UI accesible desde el contenedor. Usa una red Docker existente para el panel. Si no tienes una, créala con `docker network create seed-panel-net` y establece `QBT_NETWORK=seed-panel-net`. Desde el contenedor, `127.0.0.1` apunta al propio panel.
 
 | Variable | Valor predeterminado | Uso |
 | --- | --- | --- |
@@ -47,7 +66,24 @@ docker compose up -d --no-build
 docker compose logs -f panel
 ```
 
-En el servidor, abre `http://127.0.0.1:8765`. Para abrirlo desde Android, pon la IP LAN del servidor en `PANEL_BIND_IP` y usa esa IP desde tu wifi o VPN. El panel carece de inicio de sesión propio, así que mantenlo en una red de confianza.
+### Acceso al panel
+
+- **Desde el propio servidor.** Abre `http://127.0.0.1:8765` con la configuración predeterminada.
+- **Desde el móvil por wifi o por una VPN con acceso a tu LAN.** Pon la IP LAN del servidor en `PANEL_BIND_IP` y abre esa misma IP con el puerto `8765` desde el móvil.
+- **Desde una VPN que da al servidor una IP propia.** Pon esa IP en `PANEL_BIND_IP` para acceder por la VPN.
+
+Si el puerto está ocupado, cambia `PANEL_PORT` y usa el nuevo puerto en la URL. Tras cambiar variables de Compose, vuelve a ejecutar `docker compose up -d --no-build` desde el mismo directorio. El panel carece de inicio de sesión propio, así que mantenlo en una red de confianza.
+
+### Si algo falla
+
+| Síntoma | Qué comprobar |
+| --- | --- |
+| Docker indica que la red externa no existe | Comprueba el nombre con `docker network ls` y corrige `QBT_NETWORK`. |
+| El panel indica que falta la clave | Comprueba que esté en `secrets/.env` y que `PANEL_UID` / `PANEL_GID` correspondan al usuario que creó el archivo. |
+| La API devuelve HTTP 401 o 403 | Comprueba que la clave siga vigente y que `QBT_URL` apunte a la Web UI correcta. Si la Web UI valida los nombres de host, revisa que acepte el utilizado en la URL. |
+| El panel indica que qBittorrent no responde | Revisa el nombre del contenedor, la red compartida y el puerto interno. |
+| SQLite da un error de permisos | Comprueba que `data/` pertenezca al usuario configurado para el panel y que pueda escribir ahí. |
+| Funciona en el servidor pero no en el móvil | Revisa `PANEL_BIND_IP`, el firewall y, si estás fuera, que tu VPN tenga ruta hasta esa IP. |
 
 ## Datos y mantenimiento
 
