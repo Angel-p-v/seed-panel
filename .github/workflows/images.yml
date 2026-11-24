@@ -2,6 +2,14 @@ name: Release Docker images
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish
+        required: true
+        type: string
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 permissions:
   contents: write
 jobs:
@@ -16,10 +24,12 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
       - name: Build and test
-        run: docker build -t seed-panel:${GITHUB_REF_NAME} .
+        run: docker build -t "seed-panel:$RELEASE_TAG" .
       - name: Export image
-        run: docker save seed-panel:${GITHUB_REF_NAME} | gzip > seed-panel-${GITHUB_REF_NAME}-linux-${{ matrix.arch }}.tar.gz
+        run: docker save "seed-panel:$RELEASE_TAG" | gzip > "seed-panel-$RELEASE_TAG-linux-${{ matrix.arch }}.tar.gz"
       - uses: actions/upload-artifact@v4
         with:
           name: image-${{ matrix.arch }}
@@ -34,4 +44,4 @@ jobs:
           merge-multiple: true
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" seed-panel-*.tar.gz --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
+        run: gh release create "$RELEASE_TAG" seed-panel-*.tar.gz --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes
