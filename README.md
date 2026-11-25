@@ -8,6 +8,16 @@ Panel web de solo lectura para seguir qBittorrent desde el móvil. El colector g
 - Gráficas de subida por hora para hoy y por día desde el lunes. Pulsa una barra para ampliar la tarjeta y ver cuánto subió cada torrent en ese intervalo. Pulsa la misma barra otra vez para cerrar el detalle. Las subidas anteriores a la actualización conservan su total.
 - El panel indica la última lectura válida y conserva los datos si qBittorrent deja de responder.
 
+## Imagen en Docker Hub
+
+La misma etiqueta funciona en **AMD64** (PC y servidores x86-64) y **ARM64** (por ejemplo, Raspberry Pi con un sistema de 64 bits). Docker descarga automáticamente la variante adecuada. [Ver imagen en Docker Hub](https://hub.docker.com/r/coronel845sagaz/seed-panel)
+
+Si solo quieres descargar la imagen, ejecuta:
+
+```bash
+docker pull coronel845sagaz/seed-panel:latest
+```
+
 ## Instalación con Docker
 
 Necesitas Linux de 64 bits (AMD64 o ARM64), Git, Bash, Docker con Compose y qBittorrent 5.2 o posterior con la Web UI activa. En qBittorrent, genera una clave en **Ajustes → Interfaz web → Clave API**.
@@ -17,7 +27,7 @@ git clone https://github.com/Angel-p-v/seed-panel.git
 cd seed-panel && bash install.sh
 ```
 
-El instalador te pide la clave sin mostrarla en pantalla, descarga la imagen de Docker Hub y arranca el panel. Docker elige automáticamente la variante AMD64 o ARM64. La clave queda en `secrets/.env`. Si qBittorrent usa otra red o puerto, configura el archivo `.env` como se indica abajo y vuelve a ejecutar `bash install.sh`. [Imagen en Docker Hub](https://hub.docker.com/r/coronel845sagaz/seed-panel)
+El instalador te pide la clave sin mostrarla en pantalla y se encarga de descargar la imagen y arrancar el panel. La clave queda en `secrets/.env`. Si qBittorrent usa otra red o puerto, configura el archivo `.env` como se indica abajo y vuelve a ejecutar `bash install.sh`.
 
 Si una instalación anterior tiene `PANEL_IMAGE=seed-panel:local` o `PANEL_IMAGE=coronel845sagaz/seed-panel:arm64` en `.env`, elimina esa línea para usar la etiqueta multiplataforma al volver a ejecutar el instalador.
 
