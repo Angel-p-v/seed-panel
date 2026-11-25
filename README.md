@@ -2,33 +2,21 @@
 
 Panel web de solo lectura para seguir qBittorrent desde el móvil. El colector guarda una lectura cada 20 segundos en SQLite y el navegador consulta los datos guardados.
 
-- Pestañas de torrents compartiendo, descargando, parados y con error.
+- Pestañas de torrents compartiendo, descargando, parados y con error, y filtro por tracker.
 - Búsqueda por nombre y orden por tamaño, ratio, nombre o velocidad de subida.
 - Progreso de descarga y detalle de tiempo compartiendo, velocidad de subida y bytes desperdiciados en la sesión.
 - Gráficas de subida por hora para hoy y por día desde el lunes. El panel indica la última lectura válida y conserva los datos si qBittorrent deja de responder.
 
-## Instalación de la imagen Docker
+## Instalación con Docker
 
-Necesitas Linux de 64 bits (AMD64 o ARM64), Git, curl, Docker con Compose y qBittorrent 5.2 o posterior con la Web UI activa. En qBittorrent, abre **Ajustes → Interfaz web → Clave API** y genera una clave si todavía no tienes una. La versión ARM64 también requiere un sistema operativo de 64 bits en Raspberry Pi. Si usas Fish, entra primero en Bash ejecutando `bash`.
+Necesitas Linux de 64 bits (AMD64 o ARM64), Git, Bash, Docker con Compose y qBittorrent 5.2 o posterior con la Web UI activa. En qBittorrent, genera una clave en **Ajustes → Interfaz web → Clave API**.
 
 ```bash
 git clone https://github.com/Angel-p-v/seed-panel.git
-cd seed-panel
-arch=$(uname -m)
-case "$arch" in
-  x86_64) arch=amd64 ;;
-  aarch64) arch=arm64 ;;
-  *) printf 'Arquitectura no disponible: %s\n' "$arch" >&2; exit 1 ;;
-esac
-curl -fL -o seed-panel-image.tar.gz "https://github.com/Angel-p-v/seed-panel/releases/download/v0.1.0/seed-panel-v0.1.0-linux-$arch.tar.gz"
-docker load -i seed-panel-image.tar.gz
-umask 077
-mkdir -p data secrets
-cp -n .env.example secrets/.env
-chmod 600 secrets/.env
+cd seed-panel && bash install.sh
 ```
 
-Abre `secrets/.env` con `nano secrets/.env` y pega la clave justo después de `QBT_API_KEY=`, sin comillas. Docker monta este directorio como solo lectura y el navegador nunca recibe la clave. Mantén `.env.example` vacío.
+El instalador te pide la clave sin mostrarla en pantalla, compila la versión que acabas de clonar y arranca el panel. La clave queda en `secrets/.env`. Si qBittorrent usa otra red o puerto, configura el archivo `.env` como se indica abajo y vuelve a ejecutar `bash install.sh`.
 
 ### Conexión con qBittorrent
 
@@ -56,13 +44,11 @@ Si qBittorrent está instalado fuera de Docker o en otro equipo, indica en `QBT_
 | `QBT_NETWORK` | `qbittorrent_default` | Nombre de la red Docker existente |
 | `QBT_URL` | `http://qbittorrent:8080` | URL interna de la Web UI desde esa red |
 | `PANEL_BIND_IP` | `127.0.0.1` | Dirección del servidor donde escucha el panel |
-| `PANEL_IMAGE` | `seed-panel:v0.1.0` | Etiqueta de la imagen cargada |
+| `PANEL_IMAGE` | `seed-panel:local` con el instalador | Etiqueta de la imagen Docker |
 | `PANEL_PORT` | `8765` | Puerto del panel |
 | `PANEL_UID` / `PANEL_GID` | `1000` / `1000` | Identidad del usuario con acceso a los directorios locales |
 
 ```bash
-export PANEL_UID="$(id -u)" PANEL_GID="$(id -g)"
-docker compose up -d --no-build
 docker compose logs -f panel
 ```
 
