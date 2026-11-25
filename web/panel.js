@@ -32,8 +32,7 @@ const stateLabels = {
 const emptyLabels = {
   sharing: 'No hay torrents compartiendo.',
   downloading: 'No hay torrents descargando.',
-  stopped: 'No hay torrents parados.',
-  error: 'No hay torrents con error.',
+  stopped: 'No hay torrents parados ni con errores.',
 };
 const torrentOrder = {
   'size-desc': (first, second) => second.size - first.size,
@@ -99,6 +98,8 @@ function renderChart() {
     const label = chartDescription(bar, now);
     button.setAttribute('aria-label', label);
     button.setAttribute('aria-pressed', String(bar.start === selected));
+    button.setAttribute('aria-controls', 'chart-breakdown');
+    button.setAttribute('aria-expanded', String(bar.start === selected));
     const track = element('span', 'track');
     const fill = element('span', 'fill');
     if (bar.seconds) {
@@ -111,7 +112,7 @@ function renderChart() {
     const tick = period === 'week' ? bar.label : (index % 4 === 0 ? bar.label.slice(0, 2) : '');
     button.append(track, element('span', 'bar-label', tick));
     button.addEventListener('click', () => {
-      selected = bar.start;
+      selected = selected === bar.start ? null : bar.start;
       renderChart();
     });
     return button;
@@ -120,32 +121,60 @@ function renderChart() {
     [...root.children].find((button) => button.dataset.start === focused)?.focus({ preventScroll: true });
   }
   const selection = bars.find((bar) => bar.start === selected);
+  const uploads = selection?.uploads ?? [];
+  const hint = byId('chart-hint');
+  hint.hidden = Boolean(selection);
+  hint.textContent = 'Toca una barra para ver el detalle.';
+  byId('chart-breakdown').hidden = !selection;
+  const emptyDetail = selection?.bytes > 0
+    ? ' · Sin desglose por torrent para este intervalo.'
+    : selection?.seconds ? ' · No se registraron subidas en este intervalo.' : '';
   byId('chart-detail').textContent = selection
-    ? chartDescription(selection, now)
-    : hasData ? 'Toca una barra para ver el detalle.' : 'Sin datos de subida para este periodo.';
+    ? chartDescription(selection, now) + (uploads.length ? '' : emptyDetail)
+    : '';
+  const list = byId('chart-uploads');
+  list.replaceChildren(...uploads.map((upload) => {
+    const row = element('li', '');
+    row.append(element('span', '', upload.name), element('span', 'upload-bytes', bytes(upload.bytes)));
+    return row;
+  }));
+  list.hidden = uploads.length === 0;
 }
 
 function renderTorrents() {
   const { snapshot } = model;
   const query = searchText(byId('torrent-search').value.trim());
   const sort = torrentOrder[byId('torrent-sort').value];
-  const groups = { sharing: [], downloading: [], stopped: [], error: [] };
+  const trackerSelect = byId('torrent-tracker');
+  byId('tracker-control').hidden = group !== 'tracker';
+  const trackers = [...new Set(snapshot.torrents.flatMap((item) => item.trackers ?? []))].sort(nameOrder.compare);
+  if (trackers.length !== trackerSelect.options.length - 1 ||
+      trackers.some((tracker, index) => trackerSelect.options[index + 1].value !== tracker)) {
+    const current = trackerSelect.value;
+    trackerSelect.replaceChildren(new Option('Selecciona un tracker', ''),
+      ...trackers.map((tracker) => new Option(tracker, tracker)));
+    trackerSelect.value = trackers.includes(current) ? current : '';
+  }
+  trackerSelect.disabled = trackers.length === 0;
+  const groups = { sharing: [], downloading: [], stopped: [] };
+  const trackerItems = [];
   for (const item of snapshot.torrents) {
     if (query && !searchText(item.name).includes(query)) continue;
-    const category = item.state === 'missingFiles' || item.state === 'error' ? 'error' : item.group;
-    groups[category]?.push(item);
+    groups[item.group]?.push(item);
+    if (trackerSelect.value && item.trackers?.includes(trackerSelect.value)) trackerItems.push(item);
   }
   for (const [category, items] of Object.entries(groups)) {
     byId(category + '-count').textContent = items.length;
   }
   byId('rate').textContent = snapshot.at ? '↑ ' + bytes(snapshot.speed) + '/s' : '—';
-  if (sort) groups[group].sort(sort);
+  const items = group === 'tracker' ? trackerItems : groups[group];
+  if (sort) items.sort(sort);
   const list = byId('torrent-list');
   const focused = list.contains(document.activeElement) ? document.activeElement.dataset.hash : null;
-  const rows = groups[group].map((item) => {
+  const rows = items.map((item) => {
     const row = element('li', 'torrent');
     if (item.upspeed > 0) row.classList.add('active');
-    if (group === 'error') row.classList.add('problem');
+    if (item.state === 'error' || item.state === 'missingFiles') row.classList.add('problem');
     const summary = element('button', 'torrent-summary');
     summary.type = 'button';
     summary.dataset.hash = item.hash || '';
@@ -197,6 +226,9 @@ function renderTorrents() {
   empty.hidden = rows.length > 0;
   if (!snapshot.at) {
     empty.textContent = 'Esperando la primera lectura.';
+  } else if (group === 'tracker') {
+    empty.textContent = !trackers.length ? 'No hay trackers disponibles.'
+      : trackerSelect.value ? 'No hay coincidencias para este tracker.' : 'Selecciona un tracker para ver sus torrents.';
   } else {
     empty.textContent = query ? 'No hay coincidencias en esta pestaña.' : emptyLabels[group];
   }
@@ -281,4 +313,5 @@ for (const [key, onSelect] of [
 
 byId('torrent-search').addEventListener('input', () => { if (model) renderTorrents(); });
 byId('torrent-sort').addEventListener('change', () => { if (model) renderTorrents(); });
+byId('torrent-tracker').addEventListener('change', () => { if (model) renderTorrents(); });
 refresh();

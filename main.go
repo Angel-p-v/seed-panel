@@ -7,7 +7,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -18,8 +20,11 @@ import (
 const interval = 20 * time.Second
 
 type torrent struct {
+	Uploaded *int64   `json:"uploaded,omitempty"`
 	Hash     string   `json:"hash,omitempty"`
 	Name     string   `json:"name"`
+	Tracker  string   `json:"tracker,omitempty"`
+	Trackers []string `json:"trackers,omitempty"`
 	Size     int64    `json:"size"`
 	Speed    int64    `json:"upspeed"`
 	State    string   `json:"state"`
@@ -42,6 +47,7 @@ type transfer struct {
 }
 
 type collector struct {
+	previousUploads map[string]int64
 	url    string
 	client *http.Client
 	store  *database
@@ -115,12 +121,33 @@ func (c *collector) poll() error {
 	if torrents == nil {
 		return errors.New("qBittorrent no devolvió una lista de torrents")
 	}
+	var trackerData struct {
+		Trackers map[string][]string `json:"trackers"`
+	}
+	if err := c.get("sync/maindata?rid=0", key, &trackerData); err != nil {
+		log.Print(err)
+	}
+	hostsByHash := make(map[string][]string)
+	for address, hashes := range trackerData.Trackers {
+		host := trackerHost(address)
+		if host == "" {
+			continue
+		}
+		for _, hash := range hashes {
+			if !slices.Contains(hostsByHash[hash], host) {
+				hostsByHash[hash] = append(hostsByHash[hash], host)
+			}
+		}
+	}
 	visible := make([]torrent, 0, len(torrents))
 	for _, item := range torrents {
 		item.Group = torrentGroup(item.State)
-		if item.Group != "" {
-			visible = append(visible, item)
+		item.Trackers = hostsByHash[item.Hash]
+		if host := trackerHost(item.Tracker); host != "" && !slices.Contains(item.Trackers, host) {
+			item.Trackers = append(item.Trackers, host)
 		}
+		item.Tracker = "" // Never include announce URLs, which may contain passkeys.
+		visible = append(visible, item)
 	}
 	sort.SliceStable(visible, func(i, j int) bool {
 		if visible[i].Speed != visible[j].Speed {
@@ -130,11 +157,31 @@ func (c *collector) poll() error {
 	})
 	count := len(torrents)
 	state := snapshot{At: at, Speed: traffic.Speed, Torrents: visible, TorrentCount: &count}
-	if err := c.store.save(state, *traffic.SessionBytes); err != nil {
+	nextUploads := make(map[string]int64, len(torrents))
+	var uploads []torrentUpload
+	for _, item := range torrents {
+		if item.Hash == "" || item.Uploaded == nil || *item.Uploaded < 0 {
+			continue
+		}
+		nextUploads[item.Hash] = *item.Uploaded
+		if previous, ok := c.previousUploads[item.Hash]; ok && *item.Uploaded > previous {
+			uploads = append(uploads, torrentUpload{Hash: item.Hash, Name: item.Name, Bytes: *item.Uploaded - previous})
+		}
+	}
+	if err := c.store.save(state, *traffic.SessionBytes, uploads); err != nil {
 		return err
 	}
+	c.previousUploads = nextUploads
 	c.collectDetail(key, visible)
 	return nil
+}
+
+func trackerHost(address string) string {
+	parsed, err := url.Parse(address)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(strings.TrimSuffix(parsed.Hostname(), "."))
 }
 
 func (c *collector) run() {

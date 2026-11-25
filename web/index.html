@@ -7,8 +7,8 @@
   <title>Seeds · qBittorrent</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/icon.svg">
-  <link rel="stylesheet" href="/panel.css">
-  <script src="/panel.js" defer></script>
+  <link rel="stylesheet" href="/panel.css?v=tracker-filter">
+  <script src="/panel.js?v=tracker-filter" defer></script>
 </head>
 <body>
   <main>
@@ -38,9 +38,14 @@
         <div id="bars" class="bars" aria-label="Detalle de subida por periodo"></div>
       </div>
       <div class="chart-footer">
-        <p id="chart-detail" class="chart-detail" aria-live="polite">Esperando la primera lectura.</p>
+        <p id="chart-hint" class="chart-detail">Esperando la primera lectura.</p>
         <p id="chart-total-torrents" class="chart-total-torrents" title="Total de torrents en la última lectura">— torrents</p>
       </div>
+      <section id="chart-breakdown" class="chart-breakdown" aria-labelledby="chart-breakdown-title" hidden>
+        <h3 id="chart-breakdown-title">Subidas por torrent</h3>
+        <p id="chart-detail" class="chart-detail" aria-live="polite"></p>
+        <ul id="chart-uploads" class="chart-uploads" aria-label="Subidas registradas por torrent" hidden></ul>
+      </section>
     </section>
 
     <section class="torrents" aria-labelledby="torrents-title">
@@ -51,10 +56,16 @@
       <div class="filters" aria-label="Filtro de torrents">
         <button type="button" data-group="sharing" aria-pressed="true">Compartiendo <span id="sharing-count">0</span></button>
         <button type="button" data-group="downloading" aria-pressed="false">Descargando <span id="downloading-count">0</span></button>
-        <button type="button" data-group="stopped" aria-pressed="false">Parados <span id="stopped-count">0</span></button>
-        <button type="button" data-group="error" aria-pressed="false">Con error <span id="error-count">0</span></button>
+        <button type="button" data-group="stopped" aria-pressed="false">Parados y errores <span id="stopped-count">0</span></button>
+        <button type="button" data-group="tracker" aria-pressed="false">Tracker</button>
       </div>
       <div class="list-controls">
+        <label id="tracker-control" hidden>
+          Tracker
+          <select id="torrent-tracker">
+            <option value="">Selecciona un tracker</option>
+          </select>
+        </label>
         <label>
           Buscar por nombre
           <input id="torrent-search" type="search" placeholder="Nombre del torrent" autocomplete="off">

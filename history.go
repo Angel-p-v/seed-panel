@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 	"unsafe"
@@ -26,16 +27,24 @@ type database struct {
 }
 
 type sample struct {
-	at    int64
-	bytes int64
+	at      int64
+	bytes   int64
+	uploads []torrentUpload
+}
+
+type torrentUpload struct {
+	Hash  string `json:"hash"`
+	Name  string `json:"name"`
+	Bytes int64  `json:"bytes"`
 }
 
 type bucket struct {
-	Label   string `json:"label"`
-	Start   int64  `json:"start"`
-	End     int64  `json:"end"`
-	Bytes   int64  `json:"bytes"`
-	Seconds int64  `json:"seconds"`
+	Label   string          `json:"label"`
+	Start   int64           `json:"start"`
+	End     int64           `json:"end"`
+	Bytes   int64           `json:"bytes"`
+	Seconds int64           `json:"seconds"`
+	Uploads []torrentUpload `json:"uploads,omitempty"`
 }
 
 func openDB(path string) (*database, error) {
@@ -52,6 +61,7 @@ func openDB(path string) (*database, error) {
 	if err := db.exec(`
 		CREATE TABLE IF NOT EXISTS current_state (id INTEGER PRIMARY KEY CHECK(id = 1), snapshot TEXT NOT NULL);
 		CREATE TABLE IF NOT EXISTS samples (at INTEGER PRIMARY KEY, bytes INTEGER NOT NULL);
+		CREATE TABLE IF NOT EXISTS torrent_uploads (at INTEGER PRIMARY KEY, detail TEXT NOT NULL);
 	`); err != nil {
 		C.sqlite3_close(handle)
 		return nil, err
@@ -82,7 +92,7 @@ func (db *database) prepare(sql string) (*C.sqlite3_stmt, error) {
 	return statement, nil
 }
 
-func (db *database) save(current snapshot, counter int64) error {
+func (db *database) save(current snapshot, counter int64, uploads []torrentUpload) error {
 	data, err := json.Marshal(current)
 	if err != nil {
 		return err
@@ -108,6 +118,26 @@ func (db *database) save(current snapshot, counter int64) error {
 	if err := db.exec(fmt.Sprintf("INSERT OR REPLACE INTO samples VALUES(%d, %d); DELETE FROM samples WHERE at < %d", current.At, counter, keepFrom)); err != nil {
 		return err
 	}
+	if err := db.exec(fmt.Sprintf("DELETE FROM torrent_uploads WHERE at < %d OR at = %d", keepFrom, current.At)); err != nil {
+		return err
+	}
+	if len(uploads) > 0 {
+		detail, err := json.Marshal(uploads)
+		if err != nil {
+			return err
+		}
+		query, err := db.prepare("INSERT OR REPLACE INTO torrent_uploads VALUES(?1, ?2)")
+		if err != nil {
+			return err
+		}
+		defer C.sqlite3_finalize(query)
+		content := C.CString(string(detail))
+		defer C.free(unsafe.Pointer(content))
+		C.sqlite3_bind_int64(query, 1, C.sqlite3_int64(current.At))
+		if C.bind_snapshot(query, content, C.int(len(detail))) != C.SQLITE_OK || C.sqlite3_step(query) != C.SQLITE_DONE {
+			return db.err()
+		}
+	}
 	return db.exec("COMMIT")
 }
 
@@ -120,7 +150,8 @@ func (db *database) read(now time.Time) (day, week []bucket, samples []sample, c
 		return
 	}
 	start := week[0].Start - 150
-	query, err := db.prepare("SELECT at, bytes FROM samples WHERE at BETWEEN ?1 AND ?2 ORDER BY at")
+	query, err := db.prepare(`SELECT samples.at, bytes, detail FROM samples
+		LEFT JOIN torrent_uploads USING (at) WHERE samples.at BETWEEN ?1 AND ?2 ORDER BY samples.at`)
 	if err != nil {
 		return
 	}
@@ -133,7 +164,14 @@ func (db *database) read(now time.Time) (day, week []bucket, samples []sample, c
 		case C.SQLITE_DONE:
 			return
 		case C.SQLITE_ROW:
-			samples = append(samples, sample{int64(C.sqlite3_column_int64(query, 0)), int64(C.sqlite3_column_int64(query, 1))})
+			item := sample{at: int64(C.sqlite3_column_int64(query, 0)), bytes: int64(C.sqlite3_column_int64(query, 1))}
+			if C.sqlite3_column_type(query, 2) != C.SQLITE_NULL {
+				data := C.GoBytes(unsafe.Pointer(C.sqlite3_column_text(query, 2)), C.sqlite3_column_bytes(query, 2))
+				if err = json.Unmarshal(data, &item.uploads); err != nil {
+					return
+				}
+			}
+			samples = append(samples, item)
 		default:
 			err = db.err()
 			return
@@ -180,6 +218,7 @@ func periods(now time.Time) (day, week []bucket) {
 }
 
 func aggregate(buckets []bucket, samples []sample) []bucket {
+	totals := make([]map[string]torrentUpload, len(buckets))
 	index := 0
 	for i := 1; i < len(samples); i++ {
 		first, second := samples[i-1], samples[i]
@@ -196,12 +235,35 @@ func aggregate(buckets []bucket, samples []sample) []bucket {
 			start := max(bar.Start, first.at) - first.at
 			end := min(bar.End, second.at) - first.at
 			// Split the observed increment proportionally across a calendar boundary.
-			part := func(seconds int64) int64 {
-				return (delta/duration)*seconds + (delta%duration)*seconds/duration
+			part := func(bytes, seconds int64) int64 {
+				return (bytes/duration)*seconds + (bytes%duration)*seconds/duration
 			}
-			bar.Bytes += part(end) - part(start)
+			bar.Bytes += part(delta, end) - part(delta, start)
 			bar.Seconds += end - start
+			for _, upload := range second.uploads {
+				bytes := part(upload.Bytes, end) - part(upload.Bytes, start)
+				if bytes == 0 {
+					continue
+				}
+				if totals[j] == nil {
+					totals[j] = make(map[string]torrentUpload)
+				}
+				upload.Bytes = totals[j][upload.Hash].Bytes + bytes
+				totals[j][upload.Hash] = upload
+			}
 		}
+	}
+	for i, uploads := range totals {
+		for _, upload := range uploads {
+			buckets[i].Uploads = append(buckets[i].Uploads, upload)
+		}
+		sort.Slice(buckets[i].Uploads, func(a, b int) bool {
+			first, second := buckets[i].Uploads[a], buckets[i].Uploads[b]
+			if first.Bytes != second.Bytes {
+				return first.Bytes > second.Bytes
+			}
+			return first.Hash < second.Hash
+		})
 	}
 	return buckets
 }
