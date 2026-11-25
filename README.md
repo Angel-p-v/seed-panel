@@ -2,10 +2,11 @@
 
 Panel web de solo lectura para seguir qBittorrent desde el móvil. El colector guarda una lectura cada 20 segundos en SQLite y el navegador consulta los datos guardados.
 
-- Pestañas de torrents compartiendo, descargando, parados y con error, y filtro por tracker.
+- Pestañas **Compartiendo**, **Descargando**, **Parados y errores** y **Tracker**. En **Tracker**, elige un dominio para ver sus torrents en cualquier estado.
 - Búsqueda por nombre y orden por tamaño, ratio, nombre o velocidad de subida.
 - Progreso de descarga y detalle de tiempo compartiendo, velocidad de subida y bytes desperdiciados en la sesión.
-- Gráficas de subida por hora para hoy y por día desde el lunes. El panel indica la última lectura válida y conserva los datos si qBittorrent deja de responder.
+- Gráficas de subida por hora para hoy y por día desde el lunes. Pulsa una barra para ampliar la tarjeta y ver cuánto subió cada torrent en ese intervalo. Pulsa la misma barra otra vez para cerrar el detalle. Las subidas anteriores a la actualización conservan su total.
+- El panel indica la última lectura válida y conserva los datos si qBittorrent deja de responder.
 
 ## Instalación con Docker
 
