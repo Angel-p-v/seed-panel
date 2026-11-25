@@ -19,7 +19,12 @@ fi
 chmod 600 secrets/.env
 
 touch .env
-for setting in "PANEL_UID=$(id -u)" "PANEL_GID=$(id -g)" 'PANEL_IMAGE=seed-panel:local'; do
+default_image=seed-panel:local
+hub_image=coronel845sagaz/seed-panel:arm64
+if [[ "$(docker info --format '{{.Architecture}}')" == aarch64 ]]; then
+  default_image=$hub_image
+fi
+for setting in "PANEL_UID=$(id -u)" "PANEL_GID=$(id -g)" "PANEL_IMAGE=$default_image"; do
   if ! grep -Eq "^[[:space:]]*(export[[:space:]]+)?${setting%%=*}[[:space:]]*=" .env; then
     printf '\n%s\n' "$setting" >> .env
   fi
@@ -28,6 +33,8 @@ done
 image=$(docker compose config --images)
 if [[ "$image" == seed-panel:local ]]; then
   docker build -t "$image" .
+elif [[ "$image" == "$hub_image" ]]; then
+  docker compose pull panel
 fi
 docker compose up -d --no-build
 printf 'Panel disponible en el puerto publicado por Docker:\n'

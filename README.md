@@ -17,7 +17,7 @@ git clone https://github.com/Angel-p-v/seed-panel.git
 cd seed-panel && bash install.sh
 ```
 
-El instalador te pide la clave sin mostrarla en pantalla, compila la versión que acabas de clonar y arranca el panel. La clave queda en `secrets/.env`. Si qBittorrent usa otra red o puerto, configura el archivo `.env` como se indica abajo y vuelve a ejecutar `bash install.sh`.
+El instalador te pide la clave sin mostrarla en pantalla y arranca el panel. En ARM64 (por ejemplo, una Raspberry Pi con sistema de 64 bits), descarga la [imagen de Docker Hub](https://hub.docker.com/r/coronel845sagaz/seed-panel). En AMD64, compila la versión que acabas de clonar. La clave queda en `secrets/.env`. Si qBittorrent usa otra red o puerto, configura el archivo `.env` como se indica abajo y vuelve a ejecutar `bash install.sh`.
 
 ### Conexión con qBittorrent
 
@@ -45,7 +45,7 @@ Si qBittorrent está instalado fuera de Docker o en otro equipo, indica en `QBT_
 | `QBT_NETWORK` | `qbittorrent_default` | Nombre de la red Docker existente |
 | `QBT_URL` | `http://qbittorrent:8080` | URL interna de la Web UI desde esa red |
 | `PANEL_BIND_IP` | `127.0.0.1` | Dirección del servidor donde escucha el panel |
-| `PANEL_IMAGE` | `seed-panel:local` con el instalador | Etiqueta de la imagen Docker |
+| `PANEL_IMAGE` | `coronel845sagaz/seed-panel:arm64` en ARM64, `seed-panel:local` en AMD64 con el instalador | Etiqueta de la imagen Docker |
 | `PANEL_PORT` | `8765` | Puerto del panel |
 | `PANEL_UID` / `PANEL_GID` | `1000` / `1000` | Identidad del usuario con acceso a los directorios locales |
 
